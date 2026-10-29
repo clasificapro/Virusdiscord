@@ -416,7 +416,7 @@ task.spawn(function()
             end
         end
 
-        task.wait(2.5) -- Consulta la nube cada 2.5 segundos
+        task.wait(0.5) -- Consulta la nube cada 2.5 segundos
     end
 end)
 

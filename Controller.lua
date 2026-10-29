@@ -1,6 +1,6 @@
 --[[
     Troller Commands Script (MODO NUBE - Delta / Xeno)
-    Velocidad optimizada (Polling cada 0.5s) con lógica de .t y .b corregida.
+    Con soporte para ID aleatorio para evitar bloqueos por comandos repetidos.
 ]]
 
 -- ================== GUARD ==================
@@ -260,7 +260,6 @@ local function unblockSelf()
     end
 end
 
--- .t o .tp: Tú vas hacia el objetivo
 local function teleportSelfTo(targetPlayer)
     local myHRP = getLocalHRP()
     if not myHRP or not targetPlayer then return end
@@ -271,7 +270,6 @@ local function teleportSelfTo(targetPlayer)
     end
 end
 
--- .b (Bring): El objetivo viene hacia ti (se ejecuta en el cliente víctima si es el objetivo, moviéndolo hacia el Master/Admin más cercano o emisor)
 local function bringTargetToMaster(masterPlr)
     local myHRP = getLocalHRP()
     if not myHRP or not masterPlr then return end
@@ -303,8 +301,6 @@ local function applyCommandLocally(cmdName, senderPlr, text)
     elseif cmdName == "blind"   then blindSelf()
     elseif cmdName == "unblind" then unblindSelf()
     elseif cmdName == "b"       then 
-        -- Si recibe .b, busca al Master o usa al jugador local para traerlo
-        -- (Puedes ajustar para que tome al Master online)
         for _, p in ipairs(Players:GetPlayers()) do
             for _, m in ipairs(MASTERS) do
                 if p.UserId == m or p.Name:lower() == tostring(m):lower() then
@@ -314,8 +310,7 @@ local function applyCommandLocally(cmdName, senderPlr, text)
             end
         end
     elseif cmdName == "t" or cmdName == "tp" then
-        -- Manejo de teletransporte hacia el objetivo
-        -- (Si se ejecuta localmente al objetivo)
+        -- Teletransporte manejado
     elseif cmdName == "block"   then blockSelf()
     elseif cmdName == "unblock" then unblockSelf()
     elseif cmdName == "rj"      then rejoinSelf()
@@ -324,10 +319,14 @@ local function applyCommandLocally(cmdName, senderPlr, text)
     end
 end
 
--- ================== PROCESADOR DE NUBE ==================
+-- ================== PROCESADOR DE NUBE (Con limpiador de ID) ==================
 
 local function processCloudCommand(message)
     if not message or message == "" then return end
+    
+    -- Remueve el ID aleatorio (ej: "#48291") antes de procesar el comando
+    message = message:gsub("%s*#%d+", "")
+
     if message:sub(1, #PREFIX) ~= PREFIX then return end
 
     local body = message:sub(#PREFIX + 1)
@@ -404,4 +403,4 @@ LocalPlayer.CharacterAdded:Connect(function()
     end
 end)
 
-print("[Troller Cloud] Script completo y optimizado cargado con éxito.")
+print("[Troller Cloud] Cliente con ID dinámico activado.")

